@@ -1,0 +1,569 @@
+---
+title: "TPnon_para_13jan"
+author: "MAGOUJOU Macdonie Grace"
+date: "13/01/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(np)
+library(locfit)
+library(dplyr)
+library(ggplot2)
+library(tibble)
+library(caret)
+library(tidyverse)
+```
+
+```{r}
+
+grid_x <- function(n) {
+  seq.int(1,n)/n
+}
+
+vector_f <- function(n) {
+  x = grid_x(n)
+  X = cbind(rep(1,n), x, x^2, x^3, x^4, x^5)
+  beta = c(1,-1,2,-0.8,0.6,-1)
+  X %*% beta
+}
+
+N=100
+
+f_N <- vector_f(N)
+x_N <- grid_x(N)
+f_df_N <-  data.frame(x = x_N, f = f_N)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_line(color = "red", size = 2)
+
+
+```
+
+
+```{r}
+vector_Y <- function(n, sigma) {
+  vector_f(n) + rnorm(n, sd = sigma)
+}
+```
+
+```{r}
+n = 30
+sigma = .05
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+```
+
+```{r}
+n = 30
+sigma = .55
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+```
+
+```{r}
+n = 1000
+sigma = .55
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+```
+
+Le cas favorable c'est lorsque n est grand et sigma petit
+```{r}
+n = 1000 # augmenter progréssivement n 
+sigma = 0.05 # augmenter progréssivement la variance
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+```
+
+```{r}
+
+n = 10000
+sigma = .05
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+
+mod4 <- lm(Y ~ poly(x, 4, raw = TRUE), data = Y_df_n)# raw = true pour ne pas avoir des polynomes orthogonax
+pred4_N <- predict(mod4, f_df_N)
+pred4_df_N <- data.frame(x = x_N, pred = pred4_N)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) +
+  geom_line(color = "red", size = 2) +
+  geom_line(data = pred4_df_N, aes(y = pred), color = "blue")
+```
+```{r}
+n = 10000
+sigma = .05
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+
+mod5 <- lm(Y ~ poly(x, 5, raw = TRUE), data = Y_df_n)# raw = true pour ne pas avoir des polynomes orthogonax
+summary(mod5)
+pred5_N <- predict(mod5, f_df_N)
+pred5_df_N <- data.frame(x = x_N, pred = pred4_N)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) +
+  geom_line(color = "red", size = 2) +
+  geom_line(data = pred5_df_N, aes(y = pred), color = "blue")
+```
+
+```{r}
+anova(mod5,mod4,Y_df_n)# augmenter le dégré du polynome et voir
+```
+
+```{r}
+n = 1000
+sigma = .05
+Y_n <- vector_Y(n, sigma)
+x_n <- grid_x(n)
+
+Y_df_n <- data.frame(x = x_n, Y = Y_n)
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point()
+
+ggplot(data = Y_df_n, aes(x = x, y = Y)) + geom_point() +
+  geom_line(data = f_df_N, aes(y = f), color = "red", size = 2)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y))
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2)
+
+mod10 <- lm(Y ~ poly(x, 10, raw = TRUE), data = Y_df_n)# raw = true pour ne pas avoir des polynomes orthogonax
+summary(mod10)
+pred10_N <- predict(mod5, f_df_N)
+pred10_df_N <- data.frame(x = x_N, pred = pred4_N)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) +
+  geom_line(color = "red", size = 2) +
+  geom_line(data = pred10_df_N, aes(y = pred), color = "blue")
+```
+
+```{r}
+mod1 <- lm(Y ~ poly(x, 1, raw = TRUE), data = Y_df_n)
+pred1_N <- predict(mod1, f_df_N)
+pred1_df_N <- data.frame(x = x_N, pred = pred1_N)
+
+
+mod2 <- lm(Y ~ poly(x, 2, raw = TRUE), data = Y_df_n)
+pred2_N <- predict(mod2, f_df_N)
+pred2_df_N <- data.frame(x = x_N, pred = pred2_N)
+summary(mod2)
+
+mod4 <- lm(Y ~ poly(x, 4, raw = TRUE), data = Y_df_n)
+pred4_N <- predict(mod4, f_df_N)
+pred4_df_N <- data.frame(x = x_N, pred = pred4_N)
+
+
+mod10 <- lm(Y ~ poly(x,10, raw = TRUE), data = Y_df_n)
+pred10_N <- predict(mod10, f_df_N)
+pred10_df_N <- data.frame(x = x_N, pred = pred10_N)
+
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) + geom_line(color = "red", size = 2) +
+  geom_line(data = pred1_df_N, aes(y = pred, color = "degree 01")) +
+  geom_line(data = pred2_df_N, aes(y = pred, color = "degree 02"))+
+  geom_line(data = pred4_df_N, aes(y = pred, color = "degree 04")) +
+  geom_line(data = pred10_df_N, aes(y = pred, color = "degree 10"))
+```
+
+
+$$
+vraie =\frac{1}{n}\sum_{i=1}^n(f(x_i)-\hat f(x_i))
+$$
+$$
+
+emp = =\frac{1}{n}\sum_{i=1}^n(Y_i-\hat f(x_i))
+$$
+
+l'erreur empirique est grande que la vraie erreur car $Y_i =f() + \epsilon_i$
+```{r}
+#on peut avoir vrai erreur de prédiction car contexe simulation
+f_n <- vector_f(n)
+pred1_n <- predict(mod1)
+true_err1 <- mean((f_n - pred1_n)^2)
+emp_err1 <- mean((Y_n - pred1_n)^2)
+pred4_n <- predict(mod4)
+true_err4 <- mean((f_n - pred4_n)^2)
+emp_err4 <- mean((Y_n - pred4_n)^2)
+pred10_n <- predict(mod10)
+true_err10 <- mean((f_n - pred10_n)^2)
+emp_err10 <- mean((Y_n - pred10_n)^2)
+data.frame(true_err = c(true_err1, true_err4, true_err10),
+           emp_err = c(emp_err1, emp_err4, emp_err10))
+```
+
+6. Repeat the experiment for all degrees between 1 and 10.
+
+```{r}
+compute_model <- function(degree, Y_df_n) {
+  mod <- lm(Y ~ poly(x, degree, raw = TRUE), data = Y_df_n)
+  pred_N <- predict(mod, f_df_N)
+  pred_n <- predict(mod)
+  pred_df_N <- f_df_N %>% mutate(pred = pred_N)
+  pred_df_n <- Y_df_n %>% mutate(pred = pred_n, f = f_n)
+  true_err <- mean((f_n-pred_n)^2)
+  emp_err <- mean((Y_df_n[["Y"]]-pred_n)^2)
+  tibble(degree = degree, model = list(mod),
+         pred_n = list(pred_df_n), pred_N = list(pred_df_N), emp_err = emp_err, true_err = true_err)
+}
+
+all_models <- list()
+for (i in 1:10) {
+  all_models <- c(all_models, list(compute_model(i, Y_df_n)))
+}
+all_models <- bind_rows(all_models)
+```
+</div>
+#all_models <- map_df(1:10, ~ compute_model(., Y_df_n))
+<div class="hiddensolution">
+```{r}
+ggplot(all_models, aes(x = degree)) +
+  geom_point(aes(y = emp_err, color = "Empirical Error")) +
+  geom_line(aes(y = emp_err, color = "Empirical Error")) +
+  geom_point(aes(y = true_err, color = "True Error")) +
+  geom_line(aes(y = true_err, color = "True Error"))
+
+p <- ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) +
+  geom_line(color = "red", size = 2)
+for (i in 1:10) {
+  p <- p + geom_line(data = all_models[["pred_N"]][[i]] %>% mutate(degree = sprintf("%2d", all_models[["degree"]][[i]])),
+                     aes(x = x, y = pred, color = degree))
+}
+p
+```
+
+```{r}
+ggplot(all_models, aes(x = degree)) +
+  geom_boxplot(aes(y = emp_err, color = "Empirical Error", group = degree)) +
+  geom_boxplot(aes(y = true_err, color = "True Error", group = degree))
+```
+
+7. To test the stability, repeat the experience 100 times, compute the average errors and display them.
+
+
+```{r}
+compute_models <- function(rep) {
+  Y_n <- vector_Y(n, sigma)
+  Y_df_n <- data.frame(x = x_n, Y = Y_n)
+  all_models <- list()
+  for (i in 1:10) {
+    all_models <- c(all_models, list(compute_model(i, Y_df_n)))
+  }
+  all_models <- bind_rows(all_models)
+  all_models %>% mutate(rep = rep)
+}
+
+rep_all_models <- lapply(1:100, compute_models)
+rep_all_models <- bind_rows(rep_all_models)
+```
+
+```{r}
+ggplot(rep_all_models, aes(x = degree)) +
+  geom_boxplot(aes(y = emp_err, color = "Empirical Error", group = degree)) +
+  geom_boxplot(aes(y = true_err, color = "True Error", group = degree))
+```
+
+
+
+```{r}
+
+x0=seq(min(x_n),max(x_n),l=1000)
+mod.kern<-npreg(Y_n~x_n, exdat=x0) #plus elaboré que ksmooth  estimateur de nadaraya
+mod.smooth<-ksmooth(Y_n,x_n)
+mod.smooth_df=data.frame(mod.smooth)
+rkern=mod.kern$mean
+plot(x_n,Y_n)
+lines(x0,rkern,col='red')
+pred.kern<-predict(mod.kern)
+pred_df.kern<-data.frame(pred.kern)
+emp.error.kern<-mean((Y_n-pred.kern)^2)#erreur empirique du noyau
+emp.error.kern
+emp_err4
+names(mod.kern)
+length(x_n)
+length(mod.kern)
+X0<-seq(30,50,l=1000)
+length(X0)
+mod.kern<-npreg(Y_n~X0,exdat=X0)
+#mod_df.kern<- data.frame(mod.kern)
+rhatX0<-mod.kern$mean
+plot(X0,rhatX0)
+
+#OK
+ggplot(data = f_df_N, aes(x = x, y = f)) + geom_point(data = Y_df_n, aes(y = Y)) +
+geom_line(color = "red", linewidth = 0.5) +
+geom_line(data = pred4_df_N, aes(x=x,y = pred4_N), color = "blue")+
+geom_line(data = pred_df.kern, aes(x=x_n,y = pred.kern), color = "yellow")+
+geom_line(data = mod.smooth_df, aes(x=x,y = y), color = "pink")
+```
+# doonées relles
+
+```{r}
+library(car)
+attach(Prestige)
+str(Prestige)
+attach(Prestige)
+```
+
+```{r}
+plot(Prestige$prestige)
+```
+
+
+
+
+```{r}
+max(abs(sort(income)[1:(length(income)-1)]-sort(income)[2:length(income)])) 
+regr_kernel_2000_df <- data.frame(ksmooth(income, prestige, kernel="normal",bandwidth=2000)) # bandwidth   fénetre (h)
+regr_kernel_6000_df <- data.frame(ksmooth(income, prestige, kernel="normal",bandwidth=6000)) # essayer avec le noyau "box"
+ggplot(data = Prestige, aes(x = income, y = prestige)) + geom_point(data = Prestige, aes(x=income, y = prestige))  +
+geom_line(data = regr_kernel_2000_df, aes(x=x,y = y), color = "blue")+
+geom_line(data = regr_kernel_6000_df, aes(x=x,y = y), color = "red") # essaye avec des valeurs petites valeurs de h, quand c'est irrégulier cela veut dire que la fénetre est petite
+```
+
+```{r}
+max(abs(sort(income)[1:(length(income)-1)]-sort(income)[2:length(income)]))
+regr_kernel_1000_df <- data.frame(ksmooth(income, prestige, kernel="box",bandwidth=1000))
+regr_kernel_2000_df <- data.frame(ksmooth(income, prestige, kernel="box",bandwidth=2000))
+regr_kernel_6000_df <- data.frame(ksmooth(income, prestige, kernel="box",bandwidth=6000))
+ggplot(data = Prestige, aes(x = income, y = prestige)) + geom_point(data = Prestige, aes(x=income, y = prestige))  +
+geom_line(data = regr_kernel_2000_df, aes(x=x,y = y), color = "blue")+
+geom_line(data = regr_kernel_6000_df, aes(x=x,y = y), color = "red")+
+  geom_line(data = regr_kernel_1000_df, aes(x=x,y = y), color = "purple")
+
+
+```
+
+```{r}
+max(abs(sort(income)[1:(length(income)-1)]-sort(income)[2:length(income)]))
+regr_kernel_1000_df <- data.frame(ksmooth(income, prestige, kernel="normal",bandwidth=1000))
+regr_kernel_2000_df <- data.frame(ksmooth(income, prestige, kernel="normal",bandwidth=2000)) # la bonne fenètre  dépend  du noyau choisis
+regr_kernel_6000_df <- data.frame(ksmooth(income, prestige, kernel="normal",bandwidth=6000))
+ggplot(data = Prestige, aes(x = income, y = prestige)) + geom_point(data = Prestige, aes(x=income, y = prestige))  +
+geom_line(data = regr_kernel_2000_df, aes(x=x,y = y), color = "blue")+
+geom_line(data = regr_kernel_6000_df, aes(x=x,y = y), color = "red")+
+  geom_line(data = regr_kernel_1000_df, aes(x=x,y = y), color = "purple")
+
+
+```
+
+
+```{r,echo=T,fig=F}
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(ksmooth(income, prestige, bandwidth=5000), col="blue")
+lines(ksmooth(income, prestige, bandwidth=10000), col="red",lty=2)
+lines(ksmooth(income, prestige, bandwidth=15000), col="darkgreen", lty=3)
+lines(ksmooth(income, prestige, bandwidth=20000), col="orange",lty=4)
+legend(15000,30,c("h=5 000","h=10 000","h=15 000","h=20 000"),
+       col=c("blue","red","darkgreen","orange"), lty=c(1,2,3,4))
+```
+
+# Polynomes locaux
+
+```{r}
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(lowess(income, prestige),col="red")
+```
+
+\begin{figure}
+  \centering
+```{r, echo=F,fig=T}
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(lowess(income, prestige),col="red",lty=1)
+```
+  \caption{Régression par polynômes locaux via la fonction \emph{lowess}.}
+\end{figure}
+
+On  constate  que  cet  estimateur  est  beaucoup  plus  régulier  que
+l'estimateur de Nadaraya-Watson.\\
+
+3) On va à présent utiliser la fonction \emph{loess}. Noter que cette
+fonction prend en entrée une \emph{formule}, c'est-à-dire une relation
+du    type    \emph{var\_expliquée    $\sim$    var\_explicative1    +
+  var\_explicative2} $\dots$.  De plus, la sortie est très différente
+de celle  de la fonction  \emph{lowess}. En pratique,  pour visualiser
+l'estimateur de  la régression,  il faut calculer  ses valeurs  sur un
+ensemble  de points via  la fonction  \emph{predict} (ici,  on calcule
+$\hat  r_n^{LP}(x)$ en  toutes les  valeurs observées  de  la variable
+x=\emph{income}). De  plus, si on  veut tracer la  courbe représentant
+l'estimateur  $\hat r_n^{LP}$  via la  fonction \emph{lines},  il faut
+donner une suite d'abscisses $\{x\}$ qui soit \textbf{ordonnée}.
+
+```{r}
+regr_loess<- loess(prestige ~ income, Prestige)
+# on ordonne les observations Xi et on retire les doublons
+x_abscisse <- sort(unique(income))
+# on calcule la valeur de l'estimateur en chaque point
+y_abscisse <- predict(regr_loess, x_abscisse)
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(x_abscisse,y_abscisse,col="darkgreen",lty=2)
+legend(15000,30,c("loess","lowess"),col=c("red","darkgreen"),lty=c(1,2))
+```
+
+\begin{figure}
+  \centering
+```{r, echo=F,fig=T}
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(lowess(income, prestige),col="red",lty=1)
+lines(x_abscisse,y_abscisse,col="darkgreen",lty=2)
+legend(15000,30,c("lowess","loess"),col=c("red","darkgreen"),lty=c(1,2))
+```
+  \caption{Régression   par   polynômes   locaux   via   la   fonction
+    \emph{lowess} en rouge et via \emph{loess} en vert.}
+\end{figure}
+
+
+On observe  que les ajustements sont  très différents. Ceci  est dû au
+choix  par défaut  des  fonctions  (alors que  les  méthodes, ici  des
+polynômes locaux,  sont essentiellement  identiques). \\
+
+```{r}
+regr_spline <- smooth.spline(income, prestige)
+regr_spline
+str(regr_spline)
+regr_spline$fit$knot
+```
+
+\begin{figure}
+  \centering
+```{r, echo=F,fig=T,height=5.5}
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(regr_spline,col = "blue")
+```
+\caption{Régression par splines}
+\end{figure}
+
+L'ajustement obtenu est  une courbe très lisse. On  va à présent faire
+varier le nombre  de n\oe{}uds, via le paramètre  \emph{df}. La valeur
+utilisée ici (sélectionnée par validation croisée) vaut $3.46$.
+
+# plus le nombre des noeuds est grand, plus le biais diminue, mais la variance augmente (estiamteur moins régulier).
+
+\begin{figure}
+
+  \centering
+```{r, fig=TRUE}
+plot(income, prestige, xlab="Average Income", ylab="Prestige")
+lines(regr_spline,col = "blue")
+lines(smooth.spline(income,prestige,df=6),col="red",lty=2)
+lines(smooth.spline(income,prestige,df=10),col="darkgreen",lty=3)
+lines(smooth.spline(income,prestige,df=15),col="orange",lty=4)
+legend(15000,30,c(paste("CV: df=", round(regr_spline$df,2)),"df=6","df=10","df=15"),col=c("blue","red","darkgreen","orange"), lty=c(1,2,3,4))
+```
+  \caption{Régression par splines avec différentes valeurs de \emph{df}.}
+\end{figure}
+
+Le lien exact entre \emph{df} (qui  peut être non entier) et le nombre
+de   n\oe{}uds  n'est   pas  clairement   explicité  dans   l'aide  en
+ligne.  Pourtant,  augmenter \emph{df}  fait  augmenter  le nombre  de
+n\oe{}uds utilisés. Ici, on constate que l'ajustement avec des valeurs
+plus  grandes  que celle  choisie  par  validation  croisée n'est  pas
+(visuellement plus pertinente), ce qui somme toute est assez logique.\\
+
+
+
+
+
+# 2 partie sur les données simulées
+
+## simuler un modéle de régression
+
+```{r}
+f = function(x)
+  {
+   return (1-x + 2*x^2-0.8*x^3 + 0.6*x^4 -x^5)
+
+}
+
+```
+
+```{r}
+ x= seq(1,10000)/10000
+plot(f(x))
+```
+
+
+
+```{r}
+simu_reg =function(sigma,n)
+{
+  Y_k = rep(0,n)
+  eps = rnorm(n, mean=0, sd = sigma )
+  for(k in 1:n)
+  {
+    Y_k[k]= f(k/n) + eps[k]
+  }
+  return(Y_k)
+}
+
+```
+
+
+```{r}
+simu_reg(1,10)
+```
+
+
+
