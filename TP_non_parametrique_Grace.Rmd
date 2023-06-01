@@ -1,0 +1,635 @@
+---
+title: |
+   | "TP stastistique non paramétrique" 
+   | avec R
+subtitle: |
+  | TP 18/11/2022
+  |  M2 DS
+author: "MAGOUJOU GRACE "
+date: "Jeudi 23 Janvier 2023"
+output: pdf_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(fig.height=5, fig.width=7)
+library(ISLR,quietly = TRUE)
+library(ROCR,quietly = TRUE)
+library(MASS)
+library(Epi)
+library(aod)
+library(scales)
+library(dplyr,quietly=TRUE)
+library("dplyr")
+library(ggplot2,quietly=TRUE)
+#library("grid")
+library("gridExtra")
+library("caret")
+library(tidyverse)
+library(nortest)
+library(knitr)
+library(plyr)
+library("ggfortify")
+library("reshape2")
+library(faraway)
+library(leaps)
+library(stats)
+library(devtools)
+install_github("obouaziz/test")
+library(test)
+install_github("obouaziz/robusTest")
+library(robusTest)
+opts_template$set(figure1 = list(fig.height = 4, fig.width = 4),
+                  figure2 = list(fig.height = 2, fig.width = 4),
+                  figure3 = list(fig.height =19, fig.width = 21))
+```
+
+Le 15 avril 1912, le **Titanic** est entré en collision avec un iceberg lors de son voyage inaugural. Le naufrage du Titanic a tué 1502 des 2224 passagers et membres d'équipage.
+Etudions les données du titanic pour determiner si certains groupes de personnes avaient plus de chances de survivre que d'autres.
+
+Les variables considérés sont les :
+
+-   *Pclass* : La classe de tickets achetée par le passager
+-   *Sex* : Le genre du passager
+-   *L'Age* du passager
+-   *SibSp* : Le nombre de conjoints et/ou de frères et soeurs que le passager avait à bord avec lui/elle
+-   *Parch* : Le nombre de parents et/ou d'enfant que le passager avait avec lui/elle à bord
+-   *Fare* : Le tarif payé par le passager pour son tickets
+-   *Embarked* : Le port d'embarcation qu'a pris le passager
+-   *Survived* :survie ou non
+
+2 variables sont exclues de l'étude: - *Cabin*:
+
+-   *Ticket* : numéros de tickets
+
+# Importation et Netoyage des données
+
+```{r, include=FALSE}
+tit_data = read.csv("dataTitanic.csv")
+```
+
+```{r,include=FALSE}
+head(tit_data)
+```
+
+Notre dataset se présente donc sous cette forme:
+
+```{r,echo=FALSE}
+tit_data =subset(tit_data,select= -c(X,PassengerId,Name,Ticket,Cabin))
+head(tit_data)
+```
+
+On vérifie la présence des données manquantes
+
+```{r}
+sum(is.na(tit_data))
+```
+
+Il n'y a pas de données manquantes.
+
+On deternime la taille de notre dataset.
+
+```{r}
+dim(tit_data)
+```
+
+On fait un summary pour visualiser les agrégats de chaque variables.
+
+```{r}
+summary(tit_data)
+```
+
+on transforme toutes les variables qualitatives en "factor"
+
+```{r}
+tit_data = tit_data %>% mutate(Survived = as.factor(Survived),
+                               Pclass = as.factor(Pclass), 
+                               Sex = as.factor(Sex),
+                               SibSp = as.factor(SibSp),
+                               Parch = as.factor(Parch),
+                               Embarked = as.factor(Embarked))
+```
+
+```{r}
+attach(tit_data)
+```
+
+# Visualisatation du pourcentage de décès de notre dataset
+
+```{r, echo=FALSE}
+ggplot(tit_data, aes(x = Survived)) +
+  geom_bar(fill = "steelblue", aes(y = (..count..)/sum(..count..))) +  theme_bw()+
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Répartition des morts (Survived = 0) vs. des survivants (Survived = 1)", y = "Percent", x = " Survived")
+```
+
+On voit qu'il y a 62% de décès contre 32% de survivant dans notre dataset
+
+#Etude de l'influence de l'age des passagers sur leur décès
+
+```{r, echo=FALSE}
+ggplot(tit_data, aes( Survived, Age)) +
+  geom_boxplot(aes(fill = Survived))+labs(title="Box plot de l'age des passagers selon Survived  ",x="Survived", y = "Age") + theme(plot.title = element_text(face = "bold"))
+```
+
+on peut voire que la répartition de l'age au sein des deux groupes se fait de la même façon c'est-à-dire que à priori,il n'y a pas de dépendance entre les variable *Age* et *Survived*.
+
+On calcule la moyenne d'age dans chaque groupe
+
+```{r}
+mu <- ddply(tit_data, "Survived", summarise, grp.mean=mean(Age))
+head(mu)
+```
+
+On voit qu'ils ne sont pas très éloigné.
+
+On approfondit notre étude en divisant nos données en deux groupes
+
+```{r}
+Y=tit_data$Age[tit_data$Survived==1]
+X=tit_data$Age[tit_data$Survived==0]
+n1=sum(tit_data$Survived==1)
+n0=sum(tit_data$Survived==0)
+n0
+n1
+```
+
+On fait un *summary* dans chaque groupe
+
+```{r}
+summary(X)
+```
+
+```{r}
+summary(Y)
+```
+
+En suite, on regarde les quantiles à 1%, 25% ,50% ,75% et 99% de chaque groupe.
+
+```{r}
+quantile(X,probs=c(0.01,0.25,0.5,0.75,0.99))
+```
+
+```{r}
+quantile(Y,probs=c(0.01,0.25,0.5,0.75,0.99))
+```
+
+On fait un test de comparaison d'espérance
+
+## Test de comparaison d'esperance
+
+$$
+x_1,... ,x_n  \text{ iid}
+$$
+
+$$ 
+y_1,... ,y_n  \text{ iid }
+$$ On teste : $$
+(H_0): E(x)= E(y)
+$$ Contre $$
+(H_1): E(x)\ne E(y)
+$$
+
+La statistique de teste est :
+
+$$
+T_{n_0n_1} = \frac{\bar{x}-\bar{y}}{\sqrt{\frac{S_x^2}{n_0}+\frac{S_y^2}{n_1}}}
+$$ Où $$
+S_x^2= \frac{1}{n_0-1}\sum_{i=1}^{n_0}(x_i-\bar{x})
+$$ et $$
+S_x^2= \frac{1}{n_1-1}\sum_{i=1}^{n_1}(y_i-\bar{y})
+$$
+
+On a: $$T_{n_0n_1} \xrightarrow[H_0]{\mathcal{L}} \mathcal{N}(0,1) $$
+
+```{r}
+T=(mean(X)-mean(Y))/sqrt(var(X)/n0+var(Y)/n1)
+pvalue=2*(1-pnorm(abs(T),0,1))
+pvalue
+```
+
+La pvalue est inférieur à 5% donc on rejette H0 et on conclut que les espérances sont différentes
+
+##Test de comparaison des fonctions de répartitions empiriques (Test de Kolmogorov-Smirnov)
+
+On teste : $$
+(H_0): F_x= F_y
+$$ Contre $$
+(H_1): F_x\ne F_y
+$$ La statistique de teste est : $$
+T_{n_0n_1}=\sqrt{\frac{n_0n_1}{n_0+n_1}}||F_{n_0x}-F_{n_1y} ||_\infty
+$$ Avec $$
+F_{n_0x}(x)= \frac{1}{n_0}\sum_{i=1}^{n_0}\mathbf{1}_{x_i\le x} 
+$$
+
+$$
+F_{n_1y}(x)= \frac{1}{n_1}\sum_{i=1}^{n_1}\mathbf{1}_{y_i\le x} 
+$$
+
+```{r}
+ks.test(Y,X)
+```
+
+on rejette l'hypothèse H0: la fonction de répartition de l'age est différente dans les deux groupes
+
+## Test de la somme des rangs pour des échantillons non appariés
+
+On teste : $$
+(H_0): Med(x-y)=0
+$$ Contre $$
+(H_1): Med(x-y)\ne 0
+$$ La statistique de teste est : $$
+MW = \frac{T_{n_0n_1}}{\sqrt{\frac{V_0}{n_0}+ \frac{V_1}{n_1}}}
+$$
+
+Avec $$
+T_{n_0n_1} = \frac{1}{n_0n_1}\sum_{i=1}^{n_0} \sum_{j=1}^{n_1} (\mathbb{1}_{x_i<y_j}-0.5)
+$$ $$
+V_0 =\frac{1}{n_0-1}\sum_{i=1}^{n_0}(H_{n_1}(x_i)-\bar{H}_{n_1})^2
+$$
+
+$$
+V_1 =\frac{1}{n_1-1}\sum_{i=1}^{n_1}(F_{n_0}(x_i)-\bar{F}_{n_0})^2
+$$
+
+$$
+H_{n_1}(x)=\frac{1}{n_1}\sum_{i=1}^{n_1} \mathbf{1}_{y_i> x} 
+$$ $$
+\bar{H}_{n_1}= \frac{1}{n_0}\sum_{i=1}^{n_0} H_{n_1}(x_i)
+$$
+
+$$
+F_{n_0}(x)=\frac{1}{n_0}\sum_{i=1}^{n_0} \mathbf{1}_{X_i\le x} 
+$$ et $$
+\bar{F}_{n_0}= \frac{1}{n_1}\sum_{i=1}^{n_1} F_{n_0}(y_i)
+$$
+
+On a: $$MW \xrightarrow[H_0]{\mathcal{L}} \mathcal{N}(0,1) $$
+
+```{r}
+wilcoxtest(Y,X,paired=FALSE, ties.break = "random")
+```
+
+Ici, on a utiliser le test du github Obouaziz. Comme la pvalue est petite, on peut dire que La médiane de X-Y est différente de 0.
+
+tous les tests vont dans le même sens. En conclusion l'age des passagers a une distribution différente suivant que Survived=0 ou Survived =1
+
+## Test d'ajustement à la loi normal
+
+On s'intérèsse maintenant à la distribution des ages dans chaque groupe. On commence par faire un histogramme.
+
+```{r}
+ggplot(tit_data, aes(x = Age, fill = Survived, color= Survived)) + geom_histogram(position = "identity", alpha=0.5)+ labs(title="Histogramme de l'age des passagers selon Survived ",x="Survived", y = "effectif") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))+ geom_vline(data=mu, aes(xintercept=grp.mean, color=Survived),linetype="dashed")
+```
+
+On Commence le par le test de Shapiro
+
+```{r}
+shapiro.test(X) 
+```
+
+```{r}
+shapiro.test(Y) 
+```
+
+Les deux pvalue sont très petite donc le test de Shapiro rejètte l'hypothèse de normalité de chacun des groupe.
+
+Puis le test de Lilliefors:
+
+```{r}
+lillie.test(X) 
+```
+
+```{r}
+lillie.test(Y) 
+```
+
+Le teste de Lilliefors sur chacun des groupes rejette l'hypothèse d'adéquation avec une famille de loi normale de chaque groupe.
+
+#Etude de l'influence du prix des billets des passagers sur leur décès
+
+On commence par un Box plot du prix du billets en fonction Survived
+
+```{r, echo=FALSE}
+ggplot(tit_data, aes( Survived, Fare)) +
+  geom_boxplot(aes(fill = Survived))+labs(title="Box plot du prix du billets des passagers selon Survived ",x="Survived", y = "Fare") + theme(plot.title = element_text(face = "bold"))
+```
+On voit qu'a priori la répartition du prix des billets au sein des deux groupes diffère. Il semble y avoir une dépendance.
+
+On calcule les moyennes par groupe
+```{r}
+mu <- ddply(tit_data, "Survived", summarise, grp.mean=mean(Fare))
+head(mu)
+```
+
+On divise notre dataset en deux pour étudier chaque groupe.
+
+```{r}
+Y=tit_data$Fare[tit_data$Survived==1]
+X=tit_data$Fare[tit_data$Survived==0]
+n1=sum(tit_data$Survived==1)
+n0=sum(tit_data$Survived==0)
+n0
+n1
+```
+On fait  des *summary*
+
+```{r}
+summary(X)
+```
+
+
+```{r}
+summary(Y)
+
+```
+En suite, on regarde les quantiles à 1%, 25% ,50% ,75% et 99% de chaque groupe.
+
+```{r}
+quantile(X,probs=c(0.01,0.25,0.5,0.75,0.99))
+```
+
+
+```{r}
+quantile(Y,probs=c(0.01,0.25,0.5,0.75,0.99))
+```
+On fait le teste d'egalité des moyennes décrit plus haut.
+
+```{r}
+T=(mean(X)-mean(Y))/sqrt(var(X)/n0+var(Y)/n1)
+pvalue=2*(1-pnorm(abs(T),0,1))
+pvalue
+```
+On fait le test de comparaison des fonctions de répartitions empiriques
+
+```{r}
+ks.test(Y,X)
+```
+ On fait test de la somme des rangs pour des échantillons non appariés
+ 
+```{r}
+wilcoxtest(Y,X,paired=FALSE, ties.break = "random")
+```
+Avec ces trois testes on conclut que la distribution du prix des billets change selon le groupe.
+
+On trace l'histogramme du prix des billets:
+
+```{r, echo=FALSE}
+ggplot(tit_data, aes(x = Fare, fill = Survived, color= Survived)) + geom_histogram(position="identity", alpha=0.5)+ labs(title="Histogramme du prix des billets des passagers selon Survived ",x="Survived", y = "effectif") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))+ geom_vline(data=mu, aes(xintercept=grp.mean, color=Survived),linetype="dashed")
+```
+L'histogramme nous montre que aucune des distribution n'est gaussienne et les tests de shapiro et de Lilliefors ci- après nous le confirme.
+
+```{r}
+shapiro.test(X)  
+shapiro.test(Y) 
+```
+
+```{r}
+lillie.test(X) 
+lillie.test(Y) 
+```
+```{r}
+model_0=glm(Survived~1,family=binomial,data=tit_data)
+summary(model_0)
+```
+
+On divise en classe la variable *Fare* car elle est continue
+
+```{r}
+tit_data$fareclasse[tit_data$Fare<=15]="prix1"
+tit_data$fareclasse[tit_data$Fare>15 & tit_data$Fare<=30]="prix2"
+tit_data$fareclasse[tit_data$Fare>30 & tit_data$Fare<=50]="prix3"
+tit_data$fareclasse[tit_data$Fare>50]="prix4"
+
+```
+
+```{r}
+model=glm(Survived~ tit_data$fareclasse , family=binomial, data=tit_data)
+summary(model)
+```
+
+```{r}
+anova(model_0,model, test="Chisq" )
+```
+La pvalue étant petite, on choisit le grand modèle : "model"
+
+On trace le graphe représentant les survivants selon le prix des billets et l'age des passagers  
+
+```{r, echo=FALSE}
+ggplot(tit_data, aes(Fare, Age))   +
+  geom_point(aes(colour = Survived))+labs(title="répartition de Survived selon Age et Fare ",x="Prix des billets", y = "âge") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))+labs(title = "répartition de Survived selon Age et Fare ",size=18)+ theme(axis.text.x = element_text(face="bold", color="#993333",
+                           size=13, angle=45),
+          axis.text.y = element_text(face="bold", color="#993333",
+                           size=13, angle=45))
+```
+
+
+
+
+#Etude de l'influence du sexe des passagers sur leur décès
+
+```{r, echo=FALSE}
+ggplot(tit_data, aes(x= Sex ,  group=Survived)) +
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y= ..prop.. ), stat= "count", vjust = -0.5) +
+    labs(y = "pourcentage", fill="Sex") +
+    facet_grid(~Survived) +
+    scale_y_continuous(labels = scales::percent) + labs(title = "distribution du sexe conditionnellement à Survived", y = "Percent", x = "Survived") 
+```
+On voit clairement qu'il y a plus de survivant de sexe féminin que de sexe masculin.
+
+
+Pour s'en convaincre, on va faire des tests.
+
+## Test d'independances
+
+On va faire le test d'indépendance de *Chi-deux*. Pour cela, on a
+
+$$
+x_1,... ,x_n  \text{ iid discrete à } J \text{ modalités et }
+$$
+
+$$ y_1,... ,y_n  \text{ iid discrete à } K \text{ modalités.} 
+$$ 
+On veut tester : $$H_0: x \text{ independant de } Y $$ contre : $$H_1:x\text{ et }Y \text{ne sont pas independant} $$ On a donc: $$ H_0 : \forall \text{}u_1,...,u_J,v_1,...,v_K 
+\text{   } P(x=u_j,y=v_k)= P(x=x_j)P(y=v_k)
+$$
+
+La statistique de test est : $$
+T_n = \sum_{j=1}^{J}\sum_{k=1}^{K}\frac{(N_{jk}-\frac{N_{j.}N_{.k}}{n})^2}{\frac{N_{j.}N_{.k}}{n}}
+$$ 
+
+Avec 
+
+$$
+N_{jk}= \#\{i ;x_i=u_j\text{ et }y_k=v_k \}
+$$
+,
+$$
+N_{j.}=\#\{i ;x_i=u_j \}
+$$
+et
+$$
+N_{.k}=\#\{i ;y_k=v_k \}
+$$
+
+On a 
+$$T_n \xrightarrow[H_0]{\mathcal{L}} \mathcal{X}^2(J-1)(K-1) $$. 
+On rejette si $(H_0)$ si $T_n>seul$.
+
+
+
+```{r}
+chisq.test(tit_data$Sex, tit_data$Survived)
+```
+Le test rejette l'hypothèse d’indépendance 
+
+```{r}
+chisq.test(tit_data$Sex,tit_data$Survived)$observed
+```
+Les effectifs théoriques sont plus grand que 5 
+
+```{r}
+chisq.test(tit_data$Sex,tit_data$Survived)$expected
+```
+Comme les effectifs théoriques ne sont pas plus grands que 5, alors, on fait aussi un teste de Ficher Exact 
+
+```{r}
+fisher.test(Sex,Survived)
+```
+Le teste de Ficher exacte et le test de chi-deux  ont la même conclusion. Il y a bien une dependance
+
+
+
+
+```{r}
+model_1=glm(Survived~Sex, family=binomial, data=tit_data)
+summary(model_1)
+```
+
+
+```{r}
+anova(model_0,model_1,test="Chisq")
+```
+
+On choisit le grand modèle : "model_1"
+
+# Etude de l'influence des autres variables
+
+
+On fait les testes de Chi-deux avec chacun des autres variables. 
+
+- La classe de tickets achetée par le passager
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$Pclass, correct = F)
+```
+
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$Pclass,correct=F)$observed  
+```
+
+Le test de Chi-deux d'indépendance rejette l'hypothèse d'indépendance entre la classe de tickets achetée par le passager et le décès du passager.
+
+- Le nombre de conjoints et/ou de frères et soeurs que le passager avait à bord avec lui/elle
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$SibSp, correct = F)
+```
+
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$SibSp,correct=F)$observed  
+```
+On a des éffectifs théoriques inferieur à 5 donc on regroupe les modalités en classe.
+
+```{r}
+tit_data = tit_data %>% mutate(sibsp = fct_collapse(SibSp, "3" = c("3","4","5","8")) )
+#tit_data_cl =subset(tit_data, select= SibSp)
+```
+
+On refait le test
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$sibsp, correct = F)
+chisq.test(tit_data$Survived, tit_data$sibsp,correct=F)$observed
+```
+L'hypothèse d'indépendance est rejeté.
+
+- Le nombre de parents et/ou d'enfant que le passager avait avec lui/elle à bord
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$Parch, correct = F)$observed
+```
+On regroupe en classe 
+```{r}
+tit_data = tit_data %>% mutate(parch = fct_collapse(Parch, "3" = c("3","4","5","6","9")) )
+#tit_data_cl =subset(tit_data, select= SibSp)
+```
+On refait le test
+```{r}
+chisq.test(tit_data$Survived, tit_data$parch, correct = F)
+
+chisq.test(tit_data$Survived, tit_data$parch, correct = F)$observed
+```
+L'hypothèse d'indépendance est rejeté
+
+- Le port d'embarcation qu'a pris le passager
+
+```{r}
+chisq.test(tit_data$Survived, tit_data$Embarked, correct = F)
+chisq.test(tit_data$Survived, tit_data$Embarked, correct = F)$observed
+```
+L'hypothèse d'indépendance est rejeté
+
+#Construction d'un Modèle GLM
+
+```{r}
+tit_data$Ageclasse[tit_data$Age<=20]="age1"
+tit_data$Ageclasse[tit_data$Age>20 & tit_data$Age<=30]="age2"
+tit_data$Ageclasse[tit_data$Age>30 & tit_data$Age<=40]="age3"
+tit_data$Ageclasse[tit_data$Age>40]="age4"
+
+attach(tit_data,warn.conflicts=FALSE)
+```
+
+
+On Construit d'abors un grand modéle.
+
+```{r}
+model_2= glm(Survived~fareclasse + Ageclasse + Sex + Pclass + Embarked + tit_data$parch + tit_data$sibsp, family = "binomial" ,data = tit_data)
+summary(model_2)
+```
+
+On retire les variables avec une pvalue pas significative Pour avoir notre modèle optimal puis on utilise le critère AIC pour choisir entre le modèle optimal et le modèle le plus simple possible.
+
+
+```{r}
+model_opt = stepAIC(model_0,Survived~Sex +Ageclasse + fareclasse + Pclass   ,trace=FALSE,direction=c("both"),data = tit_data)
+sumary(model_opt)
+```
+On prédit et on on fait une table de contergence
+
+```{r}
+predictions = predict(model_opt,type = "response") 
+table(predict(model_opt,type = "response") > 1/2,Survived)
+```
+
+On trace la courbe Roc
+```{r}
+pred <- prediction( predictions, tit_data$Survived)
+perf <- performance( pred, "tpr", "fpr" )
+
+plot( perf )
+```
+
+On calcule l'auc du modèle
+```{r}
+ROC_auc <- performance( pred,"auc")
+AUC <- ROC_auc@y.values[[1]]
+print(AUC)
+```
+
+
