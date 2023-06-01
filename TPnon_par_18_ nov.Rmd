@@ -1,0 +1,334 @@
+---
+title: |
+   | "TPstastnon par" 
+   | avec R
+subtitle: |
+  | TP 18/11/2022
+  |  M2 DS
+author: "MAGOUJOU MACDONIE GRACE"
+date: "Jeudi 27 octobre 2022"
+output:
+  prettydoc::html_pretty:
+    toc: true
+    toc_depth: 1
+    number_sections: true
+---
+```{r}
+knitr::opts_chunk$set(fig.height=5, fig.width=7)
+library(ISLR,quietly = TRUE)
+library(MASS)
+library(Epi)
+library(aod)
+library(dplyr,quietly=TRUE)
+library("dplyr")
+library(ggplot2,quietly=TRUE)
+#library("grid")
+library("gridExtra")
+library("caret")
+library(tidyverse)
+library(nortest)
+library(knitr)
+#library(lasso2)
+library("ggfortify")
+library("reshape2")
+library(faraway)
+library(leaps)
+library(stats)
+library(devtools)
+install_github("obouaziz/test")
+library(test)
+install_github("obouaziz/robusTest")
+library(robusTest)
+opts_template$set(figure1 = list(fig.height = 4, fig.width = 4),
+                  figure2 = list(fig.height = 2, fig.width = 4),
+                  figure3 = list(fig.height =19, fig.width = 21))
+```
+
+
+```{r}
+help(birthwt)
+dim(birthwt)
+head(birthwt)
+summary(birthwt)
+#on transforme toutes les variables qualitatives en "factor"
+birthwt$smoke=as.factor(birthwt$smoke) # idem que birthwt=mutate(birthwt,smoke=factor(smoke))
+birthwt$race=as.factor(birthwt$race)
+birthwt$low=as.factor(birthwt$low)
+birthwt$ui=as.factor(birthwt$ui)
+birthwt$ht=as.factor(birthwt$ht)
+attach(birthwt,warn.conflicts=FALSE)
+data=birthwt
+glimpse(birthwt)
+summary(birthwt)
+```
+
+
+```{r}
+sum(is.na(birthwt)) #vérification de la présence de données manquantes
+```
+
+```{r}
+# Graphique en fréquence
+library(scales)
+ggplot(birthwt, aes(x = as.factor(low))) +
+  geom_bar(fill = "steelblue", aes(y = (..count..)/sum(..count..))) +  theme_bw()+
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Répartition BB de poids normal (low=0) vs. BB de faible poids (low=1)", y = "Percent", x = "BB de faible poids (low)")
+```
+
+```{r}
+ggplot(birthwt, aes(lwt, age))   +
+  geom_point(aes(colour = low))+labs(title="répartition de low suivant l'âge et lwt ",x="lwt", y = "âge") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))+labs(title = "fréquence de BB de faible poids",size=18)+ theme(axis.text.x = element_text(face="bold", color="#993333",
+                           size=13, angle=45),
+          axis.text.y = element_text(face="bold", color="#993333",
+                           size=13, angle=45))
+```
+
+```{r}
+# poids de la mère et variable low # données non appariées (graphiques et tests)
+ggplot(birthwt, aes(low, lwt)) + geom_boxplot(aes(fill = low))
+Y=birthwt$lwt[birthwt$low==1]
+X=birthwt$lwt[birthwt$low==0]
+n1=sum(birthwt$low==1)
+n0=sum(birthwt$low==0)
+n0
+n1
+summary(X)
+quantile(X,probs=c(0.01,0.25,0.5,0.75,0.99))
+summary(Y)
+quantile(Y,probs=c(0.01,0.25,0.5,0.75,0.99))
+#boite à moustache
+ggplot(birthwt, aes(low, lwt)) +
+  geom_boxplot(aes(fill = low))+labs(title="Boxplot poids de la mère selon low ",x="low", y = "lwt") + theme(plot.title = element_text(face = "bold"))
+#histogramme en effectif (pas adapté)
+p<-ggplot(birthwt, aes(x=lwt, fill=low, color=low)) +
+  geom_histogram(position="identity", alpha=0.5)+labs(title="histogramme poids de la mère selon low ",x="lwt", y = "effectif") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))
+p
+library(plyr)
+mu <- ddply(birthwt, "low", summarise, grp.mean=mean(lwt))
+head(mu)
+# Ajouter les moyennes
+p+geom_vline(data=mu, aes(xintercept=grp.mean, color=low),
+             linetype="dashed")
+```
+
+
+```{r}
+#lwt quantitative continue, low est une variable qualitative codée par 0 et 1
+shapiro.test(lwt[low==1]) # pas gaussien
+shapiro.test(lwt[low==0]) # pas gaussien
+lillie.test(lwt[low==1]) # pas gaussien
+lillie.test(lwt[low==0]) # pas gaussien
+# pas de teste de Student: on utilise le TLC
+Y=birthwt$lwt[birthwt$low==1]
+X=birthwt$lwt[birthwt$low==0]
+n1=sum(birthwt$low==1) #n1=59
+n0=sum(birthwt$low==0) #n0=130
+T=(mean(X)-mean(Y))/sqrt(var(X)/n0+var(Y)/n1)
+pvalue=2*(1-pnorm(abs(T),0,1))
+pvalue
+#petite pvalue donc on rejette H0 et on conclut que les espérances sont différentes
+ks.test(lwt[low==1],lwt[low==0]) # test de comparaison des fonctions de répartitions empiriques? Concl: on rejette l'hypothèse H0: les fonctions de répartition de lwt sont différentes dans les deux groupes définis par la variable low
+wilcox.test(lwt[low==1],lwt[low==0],paired=FALSE) #fonction de R mal calibré
+wilcoxtest(lwt[low==1],lwt[low==0],paired=FALSE, ties.break = "random") #version corrigée du test de la somme des rangs. test de la somme des rangs pour des échantillons non appariés. test du github Obouaziz. La médiane de X-Y est différente de 0
+#conclusion: tous les tests vont dans le même sens: le poids de la mère a une distribution  différente suivant que low=0 ou low=1
+
+```
+
+```{r}
+# Graphiques
+Y=birthwt$bwt[birthwt$smoke==1]
+X=birthwt$bwt[birthwt$smoke==0]
+n1=sum(birthwt$smoke==1)
+n0=sum(birthwt$smoke==0)
+n0
+n1
+summary(X)
+quantile(X,probs=c(0.01,0.25,0.5,0.75,0.99))
+summary(Y)
+quantile(Y,probs=c(0.01,0.25,0.5,0.75,0.99))
+#boite à moustache
+ggplot(birthwt, aes(smoke, bwt)) +
+  geom_boxplot(aes(fill = smoke))+labs(title="Boxplot poids des BB selon smoke ",x="smoke", y = "bwt") + theme(plot.title = element_text(face = "bold"))
+#histogramme en effectif (PB on compare les effectifs de deux populations différentes)
+p<-ggplot(birthwt, aes(x=bwt,fill=smoke, color=smoke)) +
+  geom_histogram(position="identity", alpha=0.5)+labs(title="histogramme poids des BB selon smoke ",x="bwt", y = "nombre") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))
+p
+library(plyr)
+mu <- ddply(birthwt, "smoke", summarise, grp.mean=mean(bwt))
+head(mu)
+# Ajouter les moyennes
+p+geom_vline(data=mu, aes(xintercept=grp.mean, color=smoke),
+             linetype="dashed")
+
+#histogramme en fréquence pb de légende
+birthwt0<-subset(birthwt, smoke == "0")
+birthwt1<-subset(birthwt, smoke == "1")
+ggplot() + geom_histogram(aes(x=bwt, y=(..count..)*100/sum(..count..),color="red", fill="red"), fill="red", alpha=.4, colour="red", data=birthwt0, binwidth =200)+ geom_histogram(aes(x=bwt,y=(..count..)*100/sum(..count..), color="blue", fill="blue"), fill="blue", alpha=.4, colour="blue", data=birthwt1, binwidth=200)+ coord_cartesian(xlim = c(700, 5000))+ xlab("poids BB")+ ylab("pourcentage (%) ")+geom_vline(data=mu, aes(xintercept=grp.mean, color=smoke),linetype="dashed") +scale_colour_manual(name="group", values=c("r" = "red", "b"="blue"), labels=c("b"="blue values", "r"="red values")) +
+  scale_fill_manual(name="group", values=c("r" = "red", "b"="blue"), labels=c("b"="blue values", "r"="red values"))+
+labs(title="histogramme poids des BB selon smoke ") + theme(plot.title = element_text(face = "bold"))+ theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r}
+shapiro.test(lwt[low==1]) # pas gaussien
+shapiro.test(lwt[low==0]) # pas gaussien
+lillie.test(lwt[low==1]) # pas gaussien
+lillie.test(lwt[low==0]) # pas gaussien
+```
+
+```{r}
+ggplot(birthwt, aes(x= low ,  group=smoke)) +
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y= ..prop.. ), stat= "count", vjust = -.5) +
+    labs(y = "pourcentage", fill="low") +
+    facet_grid(~smoke) +
+    scale_y_continuous(labels = scales::percent) + labs(title = "Distribution conditionnelle de low selon (smoke=0) vs. (smoke=1)", y = "Percent", x = "BB de faible poids (low)") # distribution conditionnelle selon smoke
+
+```
+
+```{r}
+chisq.test(birthwt$smoke, birthwt$low, correct = F)
+```
+
+```{r}
+chisq.test(birthwt$low, birthwt$ui, correct = F)
+```
+
+```{r}
+chisq.test(birthwt$low, birthwt$ht, correct = F)
+```
+
+```{r}
+chisq.test(birthwt$low, birthwt$ht, correct = F)
+```
+
+```{r}
+## Test liaison low par rapport à smoke
+chisq.test(birthwt$smoke,birthwt$low, correct=FALSE)
+chisq.test(birthwt$low,birthwt$smoke,correct=F)$observed  #effectifs observés
+chisq.test(birthwt$low,birthwt$smoke,correct=F)$expected  #effectifs théoriques ou attendus
+
+#La variable low est liée à la variable smoke
+
+# Lien entre low et autres variables qualitatives
+
+chisq.test(low,smoke) # les variables ne semblent pas indépendantes
+fisher.test(low,smoke) # test exact, utile surtant quand les effectifs théoriques ne sont pas plus grands que 5.
+twoby2(low,smoke)
+model.0=glm(low~1,family=binomial,data=birthwt)
+model.smk=glm(low~smoke, family=binomial, data=birthwt)
+summary(model.smk)
+exp(0.7041) #l'OR estimé
+anova(model.0,model.smk,test="Chisq")
+# petite pvalue donc on choisit le modele "model.smk"
+
+
+
+
+
+chisq.test(low,ui) # les variables ne sont pas indépendantes
+chisq.test(low,ht) #effectifs théoriques pas tous plus grand que 5
+chisq.test(low,ht)$expected # un des effectifs <5
+fisher.test(low,ht) # On rejette H0 et on conclut que les variables ne sont pas indépendantes.
+twoby2(low,ht)
+```
+
+```{r}
+birthwt$ageclasse[birthwt$age<=20]="age1"
+birthwt$ageclasse[birthwt$age>20 & birthwt$age<=30]="age2"
+birthwt$ageclasse[birthwt$age>30 & birthwt$age<=40]="age3"
+birthwt$ageclasse[birthwt$age>40]="age4"
+attach(birthwt,warn.conflicts=FALSE)
+```
+
+```{r}
+chisq.test(birthwt$low, birthwt$ageclasse)
+```
+
+```{r}
+chisq.test(ageclasse,low)
+chisq.test(ageclasse,low)$expected # il faut regrouper les classes d'age 3 et 4
+birthwt$ageclasse2[birthwt$age<=20]="age1"
+birthwt$ageclasse2[birthwt$age>20 & birthwt$age<=30]="age2"
+birthwt$ageclasse2[birthwt$age>30]="age3_4"
+attach(birthwt,warn.conflicts=FALSE)
+table(birthwt$ageclasse2)
+barplot(prop.table(table(low,ageclasse2),2), col=c("blue", "green"),
+        ylab="fréquences",
+        main="Répartiton de low selon la classe d'age", ylim=c(0,1.15))
+legend(legend=c("[10,20]", "]20,30]", "]30,100]"), col=c("blue","green", "yellow") ,pch=15, x=0.1,
+       y=1.151, horiz=T)
+
+barplot(prop.table(table(low,ageclasse2),1), col=c("blue","green", "yellow"),
+        ylab="fréquences",
+        main="Répartiton de l'âge selon low", ylim=c(0,1.15))
+legend(legend=c("low=0", "low=1"), col=c("blue","green") ,pch=15, x=0.1,
+       y=1.151, horiz=T)
+chisq.test(ageclasse2,low) # pas de lien entre la variable age mise en classe et la variable low
+chisq.test(ageclasse2,low)$expected
+```
+
+```{r}
+chisq.test(birthwt$low, birthwt$ageclasse2)
+```
+
+```{r}
+ggplot(data = birthwt, aes(lwt,bwt)) +
+  geom_point()+
+  geom_smooth(method="lm", formula=y ~ x)+
+  labs(title="bwt en fonction de lwt ",x="lwt", y = "bwt") # moyen
+cor(lwt,bwt)
+cor.test(lwt,bwt) #test de R mal calibré
+cortest(lwt,bwt, method="pearson") # Test de Pearson modifié: coefficient de corrélation linéaire est non nul
+cortest(lwt,bwt,method="kendall",ties.break='random')
+indeptest(lwt,bwt,ties.break="random") #test de kolmogorov Smirnov d'indépendance. On rejette l'indépendance des variables lwt et bwt
+```
+
+```{r}
+fit_logistic = glm(low ~ageclasse2+lwt+race+smoke+ptl+ht+ui+ftv, family = "binomial",
+                    data=birthwt)
+summary(fit_logistic)
+```
+
+```{r}
+modselect_st=stepAIC(model.0,low~ageclasse2+lwt+race+smoke+ptl+ht+ui+ftv,trace=FALSE,direction=c("both"), data=birthwt)
+summary(modselect_st)
+```
+
+
+```{r}
+pred_01=modselect_st$fitted.values>1/2
+table(pred_01,low)
+predictions = predict(modselect_st,type = "response")
+predictions_01 = predict(modselect_st,type = "response") > 1/2
+table(predictions_01,low)
+
+
+## Courbe ROC et AUC
+
+
+library(ROCR,quietly = TRUE)
+
+
+
+pred <- prediction( predictions, birthwt$low)
+perf <- performance( pred, "tpr", "fpr" )
+
+
+
+
+plot( perf )
+
+
+
+
+ROC_auc <- performance( pred,"auc")
+AUC <- ROC_auc@y.values[[1]]
+print(AUC)
+```
+
+
+
